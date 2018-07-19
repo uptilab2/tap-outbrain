@@ -33,6 +33,8 @@ DEFAULT_STATE = {
 
 DEFAULT_START_DATE = '2016-08-01'
 
+MARKETERS_CAMPAIGNS_MAX_LIMIT = 50
+
 
 @backoff.on_exception(backoff.constant,
                       (requests.exceptions.RequestException),
@@ -125,19 +127,6 @@ def sync_campaign_performance(state, access_token, account_id, campaign_id):
         campaign_id,
         {'campaignId': campaign_id},
         {'campaignId': campaign_id})
-
-
-def sync_link_performance(state, access_token, account_id, campaign_id,
-                          link_id):
-    return sync_performance(
-        state,
-        access_token,
-        account_id,
-        'link_performance',
-        link_id,
-        {'promotedLinkId': link_id},
-        {'campaignId': campaign_id,
-         'linkId': link_id})
 
 
 def sync_performance(state, access_token, account_id, table_name, state_sub_id,
@@ -249,12 +238,20 @@ def sync_campaigns(state, access_token, account_id):
     start = utils.now()
     response = request(
         '{}/marketers/{}/campaigns'.format(BASE_URL, account_id),
-        access_token, {})
+        access_token, {'limit': MARKETERS_CAMPAIGNS_MAX_LIMIT}).json()
+
+    if response.get('totalCount') > MARKETERS_CAMPAIGNS_MAX_LIMIT:
+        LOGGER.warn('Total Campaign Count ({}) exceeds the number of campaigns we can currently retrieve ({})'.format(
+            response.get('totalCount'),
+            MARKETERS_CAMPAIGNS_MAX_LIMIT))
+    else:
+        LOGGER.info('Total Campaign Count ({}) can be safely retrieved'.format(
+            response.get('totalCount')))
 
     time_extracted = utils.now()
 
     campaigns = [parse_campaign(campaign) for campaign
-                 in response.json().get('campaigns', [])]
+                 in response.get('campaigns', [])]
 
     for record in campaigns:
         singer.write_record('campaigns', record, time_extracted=time_extracted)
@@ -264,14 +261,6 @@ def sync_campaigns(state, access_token, account_id):
     campaigns_done = 0
 
     for campaign in campaigns:
-        # commenting this for now because it makes the integration take too
-        # long for users with many campaigns. outbrain rate limits requests
-        # to the reporting API at about 2 requests per minute. if we can
-        # get them to raise that, this can be uncommented and will work great.
-        #    - Connor (@cmcarthur on Github)
-        #
-        # sync_links(state, access_token, account_id, campaign.get('id'))
-
         sync_campaign_performance(state, access_token, account_id,
                                   campaign.get('id'))
 
@@ -289,56 +278,6 @@ def parse_link(link):
     link['lastModified'] = parse_datetime(link.get('lastModified'))
 
     return link
-
-
-def sync_links(state, access_token, account_id, campaign_id):
-    processed_count = 0
-    total_count = -1
-    fully_synced_count = 0
-    limit = 100
-
-    while processed_count != total_count:
-        LOGGER.info(
-            'Syncing {} links for campaign {} starting from offset {}'
-            .format(limit,
-                    campaign_id,
-                    processed_count))
-
-        start = utils.now()
-        response = request(
-            '{}/campaigns/{}/promotedLinks'.format(BASE_URL, campaign_id),
-            access_token, {
-                'limit': 100,
-                'offset': processed_count
-            })
-
-        time_extracted = utils.now()
-
-        links = [parse_link(link) for link
-                 in response.json().get('promotedLinks', [])]
-
-        total_count = response.json().get('totalCount')
-        processed_count = processed_count + len(links)
-
-        for link in links:
-            singer.write_record('links', link, time_extracted=time_extracted)
-
-            LOGGER.info(
-                'Syncing link performance for link {} of {}.'.format(
-                    fully_synced_count,
-                    total_count))
-
-            sync_link_performance(state, access_token, account_id, campaign_id,
-                                  link.get('id'))
-
-            fully_synced_count = fully_synced_count + 1
-
-        LOGGER.info('Done in {} sec, processed {} of {} links.'
-                    .format(time_extracted.timestamp() - start.timestamp(),
-                            processed_count,
-                            total_count))
-
-    LOGGER.info('Done syncing links for campaign {}.'.format(campaign_id))
 
 
 def do_sync(args):
@@ -384,6 +323,9 @@ def do_sync(args):
     if access_token is None:
         LOGGER.fatal("Failed to generate a new access token.")
         raise RuntimeError
+
+    # NEVER RAISE THIS ABOVE DEBUG!
+    LOGGER.debug('Using access token `{}`'.format(access_token))
 
 
     singer.write_schema('campaigns',
