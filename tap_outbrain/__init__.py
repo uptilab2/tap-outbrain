@@ -267,8 +267,7 @@ def get_campaign_pages(account_id, access_token):
         LOGGER.info('Retrieved offset `{}` campaigns out of `{}`'.format(
             offset, campaign_page.get('totalCount')))
         yield campaign_page
-        if campaign_page.get('totalCount') < (
-                offset + MARKETERS_CAMPAIGNS_MAX_LIMIT):
+        if (offset + MARKETERS_CAMPAIGNS_MAX_LIMIT) < campaign_page.get('totalCount'):
             offset += MARKETERS_CAMPAIGNS_MAX_LIMIT
         else:
             more_campaigns = False
