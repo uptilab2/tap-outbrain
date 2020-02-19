@@ -39,15 +39,14 @@ TAP_CAMPAIGN_COUNT_ERROR_CEILING = 660
 MARKETERS_CAMPAIGNS_MAX_LIMIT = 50
 # This is an arbitrary limit and can be tuned later down the road if we
 # see need for it. (Tested with 200 at least)
-REPORTS_MARKETERS_PERIODIC_MAX_LIMIT = 100
+REPORTS_MARKETERS_PERIODIC_MAX_LIMIT = 500
 
 
 @backoff.on_exception(backoff.constant,
                       (requests.exceptions.RequestException),
                       jitter=backoff.random_jitter,
                       max_tries=5,
-                      giveup=singer.requests.giveup_on_http_4xx_except_429,
-                      interval=30)
+                      giveup=singer.requests.giveup_on_http_4xx_except_429)
 def request(url, access_token, params):
     LOGGER.info("Making request: GET {} {}".format(url, params))
     headers = {'OB-TOKEN-V1': access_token}
@@ -69,8 +68,6 @@ def request(url, access_token, params):
     if resp.status_code >= 400:
         LOGGER.error("GET {} [{} - {}]".format(req.url, resp.status_code, resp.content))
         resp.raise_for_status()
-
-
 
     return resp
 
