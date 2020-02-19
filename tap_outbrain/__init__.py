@@ -57,9 +57,9 @@ def request(url, access_token, params):
     req = requests.Request('GET', url, headers=headers, params=params).prepare()
     LOGGER.info("GET {}".format(req.url))
     resp = SESSION.send(req)
-    
+
     if resp.status_code == 429:
-        limit_left = resp.headers.get('rate-limit-msec-left', 60) / 1000
+        limit_left = int(resp.headers.get('rate-limit-msec-left', 60)) / 1000
         LOGGER.info(
             'Limit is exceeded. Sleeping {} sec '
             'before making the next reporting request.'
