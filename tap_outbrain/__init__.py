@@ -57,11 +57,7 @@ def request(url, access_token, params):
     req = requests.Request('GET', url, headers=headers, params=params).prepare()
     LOGGER.info("GET {}".format(req.url))
     resp = SESSION.send(req)
-
-    if resp.status_code >= 400:
-        LOGGER.error("GET {} [{} - {}]".format(req.url, resp.status_code, resp.content))
-        resp.raise_for_status()
-
+    
     if resp.status_code == 429:
         limit_left = resp.headers.get('rate-limit-msec-left', 60) / 1000
         LOGGER.info(
@@ -69,6 +65,12 @@ def request(url, access_token, params):
             'before making the next reporting request.'
             .format(limit_left))
         time.sleep(limit_left)
+
+    if resp.status_code >= 400:
+        LOGGER.error("GET {} [{} - {}]".format(req.url, resp.status_code, resp.content))
+        resp.raise_for_status()
+
+
 
     return resp
 
