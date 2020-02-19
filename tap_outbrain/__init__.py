@@ -228,15 +228,6 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
 
         from_date = new_from_date
 
-        # if last_request_start is not None and \
-        #    (time.time() - last_request_end.timestamp()) < 6:
-        #     to_sleep = 6 - (time.time() - last_request_end.timestamp())
-        #     LOGGER.info(
-        #         'Limiting to 10 requests per minute. Sleeping {} sec '
-        #         'before making the next reporting request.'
-        #         .format(to_sleep))
-        #     time.sleep(to_sleep)
-
 
 def parse_campaign(campaign):
     if campaign.get('budget') is not None:
