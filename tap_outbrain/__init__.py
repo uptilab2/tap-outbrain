@@ -222,8 +222,8 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
         from_date = new_from_date
 
         if last_request_start is not None and \
-           (time.time() - last_request_end.timestamp()) < 30:
-            to_sleep = 30 - (time.time() - last_request_end.timestamp())
+           (time.time() - last_request_end.timestamp()) < 6:
+            to_sleep = 6 - (time.time() - last_request_end.timestamp())
             LOGGER.info(
                 'Limiting to 2 requests per minute. Sleeping {} sec '
                 'before making the next reporting request.'
