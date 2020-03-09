@@ -39,15 +39,14 @@ TAP_CAMPAIGN_COUNT_ERROR_CEILING = 660
 MARKETERS_CAMPAIGNS_MAX_LIMIT = 50
 # This is an arbitrary limit and can be tuned later down the road if we
 # see need for it. (Tested with 200 at least)
-REPORTS_MARKETERS_PERIODIC_MAX_LIMIT = 100
+REPORTS_MARKETERS_PERIODIC_MAX_LIMIT = 500
 
 
 @backoff.on_exception(backoff.constant,
                       (requests.exceptions.RequestException),
                       jitter=backoff.random_jitter,
                       max_tries=5,
-                      giveup=singer.requests.giveup_on_http_4xx_except_429,
-                      interval=30)
+                      giveup=singer.requests.giveup_on_http_4xx_except_429)
 def request(url, access_token, params):
     LOGGER.info("Making request: GET {} {}".format(url, params))
     headers = {'OB-TOKEN-V1': access_token}
@@ -57,6 +56,14 @@ def request(url, access_token, params):
     req = requests.Request('GET', url, headers=headers, params=params).prepare()
     LOGGER.info("GET {}".format(req.url))
     resp = SESSION.send(req)
+
+    if resp.status_code == 429:
+        limit_left = int(resp.headers.get('rate-limit-msec-left', 60)) / 1000
+        LOGGER.info(
+            'Limit is exceeded. Sleeping {} sec '
+            'before making the next reporting request.'
+            .format(limit_left))
+        time.sleep(limit_left)
 
     if resp.status_code >= 400:
         LOGGER.error("GET {} [{} - {}]".format(req.url, resp.status_code, resp.content))
@@ -220,15 +227,6 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
         singer.write_state(state)
 
         from_date = new_from_date
-
-        if last_request_start is not None and \
-           (time.time() - last_request_end.timestamp()) < 30:
-            to_sleep = 30 - (time.time() - last_request_end.timestamp())
-            LOGGER.info(
-                'Limiting to 2 requests per minute. Sleeping {} sec '
-                'before making the next reporting request.'
-                .format(to_sleep))
-            time.sleep(to_sleep)
 
 
 def parse_campaign(campaign):
