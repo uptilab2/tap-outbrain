@@ -27,7 +27,7 @@ BASE_URL = 'https://api.outbrain.com/amplify/v0.1'
 CONFIG = {}
 
 DEFAULT_STATE = {
-    'campaign_performance': {}
+    'campaigns': {}
 }
 
 DEFAULT_START_DATE = '2016-08-01'
@@ -95,7 +95,7 @@ def parse_performance(result, extra_fields):
     metadata = result.get('metadata', {})
 
     to_return = {
-        'fromDate': metadata.get('fromDate'),
+        'date': metadata.get('fromDate'),
         'impressions': int(metrics.get('impressions', 0)),
         'clicks': int(metrics.get('clicks', 0)),
         'ctr': float(metrics.get('ctr', 0.0)),
@@ -106,7 +106,6 @@ def parse_performance(result, extra_fields):
         'cpa': float(metrics.get('cpa', 0.0)),
     }
     to_return.update(extra_fields)
-
     return to_return
 
 
@@ -131,19 +130,7 @@ def get_date_ranges(start, end, interval_in_days):
     return to_return
 
 
-def sync_campaign_performance(state, access_token, account_id, campaign_id):
-    return sync_performance(
-        state,
-        access_token,
-        account_id,
-        'campaign_performance',
-        campaign_id,
-        {'campaignId': campaign_id},
-        {'campaignId': campaign_id})
-
-
-def sync_performance(state, access_token, account_id, table_name, state_sub_id,
-                     extra_params, extra_persist_fields):
+def sync_campaign(state, access_token, account_id, campaign):
     """
     This function is heavily parameterized as it is used to sync performance
     both based on campaign ID alone, and by campaign ID and link ID.
@@ -165,6 +152,8 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
 
                                 {'campaignId': '000b...'}
     """
+    table_name = 'campaigns'
+    state_sub_id = campaign.get('id')
     # sync 2 days before last saved date, or DEFAULT_START_DATE
     from_date = datetime.datetime.strptime(
         state.get(table_name, {})
@@ -183,7 +172,7 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
         LOGGER.info(
             'Pulling {} for {} from {} to {}'
             .format(table_name,
-                    extra_persist_fields,
+                    {'id': campaign.get('id')},
                     date_range.get('from_date'),
                     date_range.get('to_date')))
 
@@ -194,8 +183,8 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
             'limit': REPORTS_MARKETERS_PERIODIC_MAX_LIMIT,
             'sort': '+fromDate',
             'includeArchivedCampaigns': True,
+            'campaignId': campaign.get('id')
         }
-        params.update(extra_params)
 
         last_request_start = utils.now()
         response = request(
@@ -214,14 +203,14 @@ def sync_performance(state, access_token, account_id, table_name, state_sub_id,
             last_request_end.timestamp() - last_request_start.timestamp()))
 
         performance = [
-            parse_performance(result, extra_persist_fields)
+            parse_performance(result, campaign)
             for result in response.get('results')]
 
         for record in performance:
             singer.write_record(table_name, record, time_extracted=last_request_end)
 
         last_record = performance[-1]
-        new_from_date = last_record.get('fromDate')
+        new_from_date = last_record.get('date')
 
         state[table_name][state_sub_id] = new_from_date
         singer.write_state(state)
@@ -279,10 +268,8 @@ def sync_campaign_page(state, access_token, account_id, campaign_page):
                  in campaign_page.get('campaigns', [])]
 
     for campaign in campaigns:
-        singer.write_record('campaigns', campaign,
-                            time_extracted=utils.now())
-        sync_campaign_performance(state, access_token, account_id,
-                                  campaign.get('id'))
+        sync_campaign(state, access_token, account_id,
+                                  campaign)
 
 
 def sync_campaigns(state, access_token, account_id):
@@ -344,11 +331,8 @@ def do_sync(args):
 
     singer.write_schema('campaigns',
                         schemas.campaign,
-                        key_properties=["id"])
-    singer.write_schema('campaign_performance',
-                        schemas.campaign_performance,
-                        key_properties=["campaignId", "fromDate"],
-                        bookmark_properties=["fromDate"])
+                        key_properties=["id", "date"],
+                        bookmark_properties=["date"])
 
     sync_campaigns(state, access_token, account_id)
 
