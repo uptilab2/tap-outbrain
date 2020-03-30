@@ -26,9 +26,7 @@ SESSION = requests.Session()
 BASE_URL = 'https://api.outbrain.com/amplify/v0.1'
 CONFIG = {}
 
-DEFAULT_STATE = {
-    'campaigns': {}
-}
+DEFAULT_STATE = {}
 
 DEFAULT_START_DATE = '2016-08-01'
 
@@ -126,11 +124,10 @@ def get_date_ranges(start, end, interval_in_days):
 
         interval_start = interval_start + datetime.timedelta(
             days=interval_in_days)
-
     return to_return
 
 
-def sync_campaign(state, access_token, account_id, campaign):
+def sync_campaigns_with_performance(state, access_token, account_id, campaigns):
     """
     This function is heavily parameterized as it is used to sync performance
     both based on campaign ID alone, and by campaign ID and link ID.
@@ -153,11 +150,9 @@ def sync_campaign(state, access_token, account_id, campaign):
                                 {'campaignId': '000b...'}
     """
     table_name = 'campaigns'
-    state_sub_id = campaign.get('id')
     # sync 2 days before last saved date, or DEFAULT_START_DATE
     from_date = datetime.datetime.strptime(
-        state.get(table_name, {})
-        .get(state_sub_id, DEFAULT_START_DATE),
+        state.get('date', DEFAULT_START_DATE),
         '%Y-%m-%d').date() - datetime.timedelta(days=2)
 
     to_date = datetime.date.today()
@@ -165,57 +160,60 @@ def sync_campaign(state, access_token, account_id, campaign):
     interval_in_days = REPORTS_MARKETERS_PERIODIC_MAX_LIMIT
 
     date_ranges = get_date_ranges(from_date, to_date, interval_in_days)
-
     last_request_start = None
 
     for date_range in date_ranges:
-        LOGGER.info(
-            'Pulling {} for {} from {} to {}'
-            .format(table_name,
-                    {'id': campaign.get('id')},
-                    date_range.get('from_date'),
-                    date_range.get('to_date')))
+        for campaign in campaigns:
+            state_sub_id = campaign.get('id')
 
-        params = {
-            'from': date_range.get('from_date'),
-            'to': date_range.get('to_date'),
-            'breakdown': 'daily',
-            'limit': REPORTS_MARKETERS_PERIODIC_MAX_LIMIT,
-            'sort': '+fromDate',
-            'includeArchivedCampaigns': True,
-            'campaignId': campaign.get('id')
-        }
+            LOGGER.info(
+                'Pulling {} for {} from {} to {}'
+                .format(table_name,
+                        {'id': campaign.get('id')},
+                        date_range.get('from_date'),
+                        date_range.get('to_date')))
 
-        last_request_start = utils.now()
-        response = request(
-            '{}/reports/marketers/{}/periodic'.format(BASE_URL, account_id),
-            access_token,
-            params).json()
-        if REPORTS_MARKETERS_PERIODIC_MAX_LIMIT < response.get('totalResults'):
-            LOGGER.warn('More performance data (`{}`) than the tap can currently retrieve (`{}`)'.format(
-                response.get('totalResults'), REPORTS_MARKETERS_PERIODIC_MAX_LIMIT))
-        else:
-            LOGGER.info('Syncing `{}` rows of performance data for campaign `{}`. Requested `{}`.'.format(
-                response.get('totalResults'), state_sub_id, REPORTS_MARKETERS_PERIODIC_MAX_LIMIT))
-        last_request_end = utils.now()
+            params = {
+                'from': date_range.get('from_date'),
+                'to': date_range.get('to_date'),
+                'breakdown': 'daily',
+                'limit': REPORTS_MARKETERS_PERIODIC_MAX_LIMIT,
+                'sort': '+fromDate',
+                'includeArchivedCampaigns': True,
+                'campaignId': campaign.get('id')
+            }
 
-        LOGGER.info('Done in {} sec'.format(
-            last_request_end.timestamp() - last_request_start.timestamp()))
+            last_request_start = utils.now()
+            response = request(
+                '{}/reports/marketers/{}/periodic'.format(BASE_URL, account_id),
+                access_token,
+                params).json()
+            if REPORTS_MARKETERS_PERIODIC_MAX_LIMIT < response.get('totalResults'):
+                LOGGER.warn('More performance data (`{}`) than the tap can currently retrieve (`{}`)'.format(
+                    response.get('totalResults'), REPORTS_MARKETERS_PERIODIC_MAX_LIMIT))
+            else:
+                LOGGER.info('Syncing `{}` rows of performance data for campaign `{}`. Requested `{}`.'.format(
+                    response.get('totalResults'), state_sub_id, REPORTS_MARKETERS_PERIODIC_MAX_LIMIT))
+            last_request_end = utils.now()
 
-        performance = [
-            parse_performance(result, campaign)
-            for result in response.get('results')]
+            LOGGER.info('Done in {} sec'.format(
+                last_request_end.timestamp() - last_request_start.timestamp()))
 
-        for record in performance:
-            singer.write_record(table_name, record, time_extracted=last_request_end)
+            performance = [
+                parse_performance(result, campaign)
+                for result in response.get('results')]
 
-        last_record = performance[-1]
-        new_from_date = last_record.get('date')
+            for record in performance:
+                singer.write_record(table_name, record, time_extracted=last_request_end)
 
-        state[table_name][state_sub_id] = new_from_date
-        singer.write_state(state)
+            last_record = performance[-1]
+            new_from_date = last_record.get('date')
 
-        from_date = new_from_date
+            # state[table_name][state_sub_id] = new_from_date
+            state['date'] = new_from_date
+            singer.write_state(state)
+
+            from_date = new_from_date
 
 
 def parse_campaign(campaign):
@@ -267,9 +265,9 @@ def sync_campaign_page(state, access_token, account_id, campaign_page):
     campaigns = [parse_campaign(campaign) for campaign
                  in campaign_page.get('campaigns', [])]
 
-    for campaign in campaigns:
-        sync_campaign(state, access_token, account_id,
-                                  campaign)
+    # for campaign in campaigns:
+    sync_campaigns_with_performance(state, access_token, account_id,
+                                  campaigns)
 
 
 def sync_campaigns(state, access_token, account_id):
