@@ -91,8 +91,9 @@ def parse_datetime(date_time):
 def parse_performance(result, extra_fields):
     metrics = result.get('metrics', {})
     metadata = result.get('metadata', {})
-
-    to_return = {
+    to_return = {}
+    to_return.update(extra_fields)
+    to_return.update({
         'date': metadata.get('fromDate'),
         'impressions': int(metrics.get('impressions', 0)),
         'clicks': int(metrics.get('clicks', 0)),
@@ -102,8 +103,7 @@ def parse_performance(result, extra_fields):
         'conversions': int(metrics.get('conversions', 0)),
         'conversionRate': float(metrics.get('conversionRate', 0.0)),
         'cpa': float(metrics.get('cpa', 0.0)),
-    }
-    to_return.update(extra_fields)
+    })
     return to_return
 
 
