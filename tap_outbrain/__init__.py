@@ -217,6 +217,7 @@ def sync_campaigns_with_performance(state, access_token, account_id, campaigns):
 
 
 def parse_campaign(campaign):
+    campaign = {key: value for key, value in campaign.items() if key in schemas.campaign['properties'] }
     if campaign.get('budget') is not None:
         campaign['budget']['creationTime'] = parse_datetime(
             campaign.get('budget').get('creationTime'))
