@@ -210,20 +210,8 @@ campaign = {
             'description': ('Cost per monetized user action (for example '
                             'cost per click). See Currencies for valid '
                             'cost values')
-        }
-    }
-}
-
-
-campaign_performance = {
-    'type': 'object',
-    'properties': {
-        'campaignId': {
-            'type': 'string',
-            'description': ('The campaign ID plus the start date (day) '
-                            'for this record.')
         },
-        'fromDate': {
+        'date': {
             'type': 'string',
             'format': 'date',
             'description': 'The start date for this record.'
@@ -274,6 +262,7 @@ campaign_performance = {
         }
     }
 }
+
 
 link_performance = {
     'type': 'object',
