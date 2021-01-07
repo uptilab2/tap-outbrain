@@ -322,7 +322,7 @@ def do_sync(args):
         LOGGER.fatal("Missing {}.".format(", ".join(missing_keys)))
         raise RuntimeError
 
-    access_token = config.get('access_token')
+    access_token = config.get('access_token', None)
 
     if not access_token:
         access_token = generate_token(username, password)
