@@ -224,7 +224,7 @@ def parse_campaign(campaign):
             campaign.get('budget').get('creationTime'))
         campaign['budget']['lastModified'] = parse_datetime(
             campaign.get('budget').get('lastModified'))
-    
+
     if campaign.get('liveStatus') is not None:
         campaign['onAirReason'] = campaign['liveStatus']['onAirReason']
         campaign['campaignOnAir'] = campaign['liveStatus']['campaignOnAir']
@@ -324,7 +324,7 @@ def do_sync(args):
 
     access_token = config.get('access_token')
 
-    if access_token is None:
+    if not access_token:
         access_token = generate_token(username, password)
 
     if access_token is None:
